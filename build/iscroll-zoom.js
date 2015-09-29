@@ -1,11 +1,18 @@
-/*! iScroll v5.1.3 ~ (c) 2008-2014 Matteo Spinelli ~ http://cubiq.org/license */
+/*! iScroll v5.1.3 ~ (c) 2008-2015 Matteo Spinelli ~ http://cubiq.org/license */
 (function (window, document, Math) {
 var rAF = window.requestAnimationFrame	||
 	window.webkitRequestAnimationFrame	||
 	window.mozRequestAnimationFrame		||
 	window.oRequestAnimationFrame		||
 	window.msRequestAnimationFrame		||
-	function (callback) { window.setTimeout(callback, 1000 / 60); };
+	function (callback) { return window.setTimeout(callback, 1000 / 60); };
+
+var cAF = window.cancelAnimationFrame	||
+	window.webkitCancelAnimationFrame	||
+	window.mozCancelAnimationFrame		||
+	window.oCancelAnimationFrame		||
+	window.msCancelAnimationFrame		||
+	function (id) { clearTimeout(id); };
 
 var utils = (function () {
 	var me = {};
@@ -533,7 +540,7 @@ IScroll.prototype = {
 	},
 
 	_end: function (e) {
-		if ( !this.enabled || utils.eventType[e.type] !== this.initiated ) {
+		if ( !this.enabled || utils.eventType[e.type] !== this.initiated || this.isInTransition ) {
 			return;
 		}
 
@@ -758,9 +765,10 @@ IScroll.prototype = {
 	scrollTo: function (x, y, time, easing) {
 		easing = easing || utils.ease.circular;
 
-		this.isInTransition = this.options.useTransition && time > 0;
-
-		if ( !time || (this.options.useTransition && easing.style) ) {
+		if (!time) {
+			this._translate(x, y);
+		} else if (this.options.useTransition && easing.style) {
+			this.isInTransition = true;
 			this._transitionTimingFunction(easing.style);
 			this._transitionTime(time);
 			this._translate(x, y);
@@ -1249,7 +1257,8 @@ IScroll.prototype = {
 		wheelDeltaY *= this.options.invertWheelDirection;
 
 		if ( !this.hasVerticalScroll ) {
-			wheelDeltaX = wheelDeltaY;
+			if (Math.abs(wheelDeltaY) > Math.abs(wheelDeltaX))
+				wheelDeltaX = wheelDeltaY;
 			wheelDeltaY = 0;
 		}
 
@@ -1671,6 +1680,10 @@ IScroll.prototype = {
 			startTime = utils.getTime(),
 			destTime = startTime + duration;
 
+			if (that._animateTimeout)	{
+				cAF(that._animateTimeout);
+			}
+
 		function step () {
 			var now = utils.getTime(),
 				newX, newY,
@@ -1694,7 +1707,7 @@ IScroll.prototype = {
 			that._translate(newX, newY);
 
 			if ( that.isAnimating ) {
-				rAF(step);
+				that._animateTimeout = rAF(step);
 			}
 		}
 
